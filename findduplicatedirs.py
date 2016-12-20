@@ -18,22 +18,32 @@ import hashlib
 from collections import defaultdict
 
 if len(sys.argv) != 2:
-    print("usage: %s directory"%sys.argv[0])
+    print("usage: %s directory" % sys.argv[0])
     exit(1)
 
-dirhashes=dict()
-duplicates=defaultdict(list)
-diskusage=dict()
-subtreesize=dict()
+dirhashes = dict()
+duplicates = defaultdict(list)
+diskusage = dict()
+subtreesize = dict()
 
-root=os.path.abspath(sys.argv[1])
+root = os.path.abspath(sys.argv[1])
 
+exclude = ['.Trash-1000', '.Trashes']
 directorywalk = list(os.walk(root, topdown=False))
+
+# walk = []
+# for dirpath, dirnames, filenames in directorywalk:
+#     dirpath[:] = [d for d in dirpath if d not in exclude]
+#     dirnames[:] = [d for d in dirnames if d not in exclude]
+#     walk.append((dirpath, dirnames, filenames))
 
 total = len(directorywalk)
 
 for (i, (dirpath, dirnames, filenames)) in enumerate(directorywalk):
-    print("%.02f\r"%((100.0*(i+1))/total), file=sys.stderr, end='')
+    # dirnames[:] = [d for d in dirnames if d not in exclude]
+    # if '.Trash' in dirpath:
+    #     continue
+    print("%.02f\r" % ((100.0*(i+1))/total), file=sys.stderr, end='')
     h = hashlib.sha256()
     # initialize disk usage to the size of this directory
     du = os.path.getsize(dirpath)
@@ -44,7 +54,8 @@ for (i, (dirpath, dirnames, filenames)) in enumerate(directorywalk):
     for filename in sorted(filenames):
         h.update(filename.encode('utf8', 'surrogateescape'))
         filename = os.path.join(dirpath, filename)
-        # we ignore the content of everything that is not a regular file or symlink
+        # we ignore the content of everything that is not a regular file or
+        # symlink.
         # the content of a symlink is its destination
         if os.path.islink(filename):
             h.update(os.readlink(filename).encode('utf8', 'surrogateescape'))
@@ -55,15 +66,20 @@ for (i, (dirpath, dirnames, filenames)) in enumerate(directorywalk):
                     h.update(chunk)
     # process all directories
     for dirname in sorted(dirnames):
+        # if '.Trash' in dirname:
+        #     continue
         h.update(dirname.encode('utf8', 'surrogateescape'))
         dirname = os.path.join(dirpath, dirname)
         if os.path.islink(dirname):
             h.update(os.readlink(dirname).encode('utf8', 'surrogateescape'))
         else:
-            sha = dirhashes[dirname]
-            du += diskusage[sha]
-            sts += subtreesize[sha]
-            h.update(sha)
+            try:
+                sha = dirhashes[dirname]
+                du += diskusage[sha]
+                sts += subtreesize[sha]
+                h.update(sha)
+            except KeyError:
+                print('KeyError: %s' % dirname)
     # update information
     sha = h.digest()
     dirhashes[dirpath] = sha
@@ -75,7 +91,7 @@ for (i, (dirpath, dirnames, filenames)) in enumerate(directorywalk):
 # belonging to the hash have direct parent directories with a different hash
 # remain
 nondups = list()
-for k,v in duplicates.items():
+for k, v in duplicates.items():
     # if a hash only has one directory, there is no duplicate
     if len(v) == 1:
         continue
@@ -93,4 +109,4 @@ for sha in nondups:
     du = diskusage[sha]
     sts = subtreesize[sha]
     dirs = [os.path.relpath(p) for p in duplicates[sha]]
-    print("%d\t%d\t%s"%(du, sts, "\t".join(dirs)))
+    print("%d\t%d\t%s" % (du, sts, "\t".join(dirs)))
